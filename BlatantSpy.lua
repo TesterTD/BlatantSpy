@@ -1,21 +1,3 @@
-local AdonisBypassed = false
-pcall(function()
-    if getgc and hookfunction and debug and debug.getinfo then
-        for _, v in next, getgc(true) do
-            if type(v) == "function" and debug.getinfo(v).name == "compareTables" then
-                hookfunction(v, newcclosure(function() return true end))
-                AdonisBypassed = true
-            end
-        end
-    end
-end)
-
-local sc = cloneref(game:GetService("ScriptContext"))
-for _, c in getconnections(sc.Error) do
-    c:Disconnect()
-end
-
-
 local ClonedFunctions = {}
 
 do
@@ -96,6 +78,31 @@ local getmetatable = ClonedFunctions.getmetatable
 local unpack = ClonedFunctions.unpack
 
 local Globals = getgenv()
+
+local AdonisBypassed = false
+
+local function PatchAdonisDetections()
+    pcall(function()
+        for _, v in getgc(true) do
+            if type(v) == "table" and rawget(v, "indexInstance") then
+                for k, det in pairs(v) do
+                    if type(det) == "table" and type(det[2]) == "function" then
+                        hookfunction(det[2], newcclosure(function()
+                            return false
+                        end))
+                    end
+                end
+                AdonisBypassed = true
+                break
+            end
+        end
+    end)
+end
+
+local sc = cloneref(game:GetService("ScriptContext"))
+for _, c in getconnections(sc.Error) do
+    c:Disconnect()
+end
 
 if Globals.BlatantSpyLoaded then
     if Globals.BlatantSpyInstance then
@@ -249,6 +256,112 @@ do
 end
 
 local LocalPlayer = Services.Players.LocalPlayer
+
+local function ShowAdonisPrompt(callback)
+    local PromptGui = Instance.new("ScreenGui")
+    PromptGui.Name = "BlatantSpyAdonisPrompt"
+    PromptGui.ResetOnSpawn = false
+    PromptGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+    PromptGui.DisplayOrder = 9999
+    
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Size = UDim2.new(0, 350, 0, 140)
+    MainFrame.Position = UDim2.new(0.5, -175, 0.5, -70)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
+    MainFrame.BackgroundTransparency = 0.05
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Parent = PromptGui
+    
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 8)
+    Corner.Parent = MainFrame
+    
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Color = Color3.fromRGB(0, 122, 204)
+    Stroke.Thickness = 1
+    Stroke.Transparency = 0.5
+    Stroke.Parent = MainFrame
+    
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, -20, 0, 30)
+    Title.Position = UDim2.new(0, 10, 0, 15)
+    Title.BackgroundTransparency = 1
+    Title.Text = "BLATANTSPY"
+    Title.TextColor3 = Color3.fromRGB(0, 122, 204)
+    Title.TextSize = 18
+    Title.Font = Enum.Font.GothamBold
+    Title.TextXAlignment = Enum.TextXAlignment.Center
+    Title.Parent = MainFrame
+    
+    local Question = Instance.new("TextLabel")
+    Question.Size = UDim2.new(1, -20, 0, 25)
+    Question.Position = UDim2.new(0, 10, 0, 50)
+    Question.BackgroundTransparency = 1
+    Question.Text = "Patch AdonisDetections?"
+    Question.TextColor3 = Color3.fromRGB(220, 220, 220)
+    Question.TextSize = 16
+    Question.Font = Enum.Font.Gotham
+    Question.TextXAlignment = Enum.TextXAlignment.Center
+    Question.Parent = MainFrame
+    
+    local ButtonContainer = Instance.new("Frame")
+    ButtonContainer.Size = UDim2.new(1, -40, 0, 36)
+    ButtonContainer.Position = UDim2.new(0, 20, 0, 90)
+    ButtonContainer.BackgroundTransparency = 1
+    ButtonContainer.Parent = MainFrame
+    
+    local YesBtn = Instance.new("TextButton")
+    YesBtn.Size = UDim2.new(0, 120, 0, 36)
+    YesBtn.Position = UDim2.new(0, 0, 0, 0)
+    YesBtn.BackgroundColor3 = Color3.fromRGB(87, 181, 106)
+    YesBtn.BackgroundTransparency = 0.2
+    YesBtn.Text = "YES"
+    YesBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    YesBtn.TextSize = 14
+    YesBtn.Font = Enum.Font.GothamBold
+    YesBtn.BorderSizePixel = 0
+    YesBtn.Parent = ButtonContainer
+    
+    local YesBtnCorner = Instance.new("UICorner")
+    YesBtnCorner.CornerRadius = UDim.new(0, 6)
+    YesBtnCorner.Parent = YesBtn
+    
+    local NoBtn = Instance.new("TextButton")
+    NoBtn.Size = UDim2.new(0, 120, 0, 36)
+    NoBtn.Position = UDim2.new(1, -120, 0, 0)
+    NoBtn.BackgroundColor3 = Color3.fromRGB(219, 75, 75)
+    NoBtn.BackgroundTransparency = 0.2
+    NoBtn.Text = "NO"
+    NoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NoBtn.TextSize = 14
+    NoBtn.Font = Enum.Font.GothamBold
+    NoBtn.BorderSizePixel = 0
+    NoBtn.Parent = ButtonContainer
+    
+    local NoBtnCorner = Instance.new("UICorner")
+    NoBtnCorner.CornerRadius = UDim.new(0, 6)
+    NoBtnCorner.Parent = NoBtn
+    
+    if syn and syn.protect_gui then
+        syn.protect_gui(PromptGui)
+        PromptGui.Parent = cloneref(game:GetService("CoreGui"))
+    elseif gethui then
+        PromptGui.Parent = gethui()
+    else
+        PromptGui.Parent = cloneref(game:GetService("CoreGui"))
+    end
+    
+    YesBtn.MouseButton1Click:Connect(function()
+        PromptGui:Destroy()
+        PatchAdonisDetections()
+        callback()
+    end)
+    
+    NoBtn.MouseButton1Click:Connect(function()
+        PromptGui:Destroy()
+        callback()
+    end)
+end
 
 local Theme = {
     Primary = Color3.fromRGB(30, 30, 30),
@@ -1092,7 +1205,7 @@ function Decompiler:Process(scriptInstance)
         end
     end
     
-    if getscriptbytecode then  -- There are no plans to use getscriptbytecode, prolly.
+    if getscriptbytecode then -- ..........
         local success, bytecode = pcall(getscriptbytecode, scriptInstance)
         if success and bytecode then
             if disassemble then
@@ -1121,6 +1234,8 @@ function UI.new(logger, blockList, decompiler)
     self.Gui = nil
     self.Main = nil
     self.LogList = nil
+    self.ContentFrame = nil
+    self.Toolbar = nil
     self.GroupItems = {}
     self.SelectedEntry = nil
     self.SelectedGroup = nil
@@ -1129,6 +1244,7 @@ function UI.new(logger, blockList, decompiler)
     self.Minimized = false
     self.MinWindowWidth = 400
     self.MinWindowHeight = 300
+    self.ExpandedHeight = 500
     
     self.PendingGroups = {}
     self.UpdateConnection = nil
@@ -1228,6 +1344,7 @@ function UI:BuildMain()
         Position = UDim2.new(0.5, -375, 0.5, -250),
         BackgroundColor3 = Theme.Primary,
         BackgroundTransparency = Theme.Transparency,
+        ClipsDescendants = true,
         Parent = self.Gui
     })
     
@@ -1347,7 +1464,7 @@ end
 function UI:BuildToolbar()
     if not self.Main then return end
     
-    local toolbar = Utils.Create("Frame", {
+    self.Toolbar = Utils.Create("Frame", {
         Name = "Toolbar",
         Size = UDim2.new(1, -24, 0, 36),
         Position = UDim2.new(0, 12, 0, 46),
@@ -1355,7 +1472,7 @@ function UI:BuildToolbar()
         Parent = self.Main
     })
     
-    if not toolbar then return end
+    if not self.Toolbar then return end
     
     local searchBox = Utils.Create("TextBox", {
         Name = "Search",
@@ -1370,7 +1487,7 @@ function UI:BuildToolbar()
         TextSize = 14,
         Font = Enum.Font.Gotham,
         ClearTextOnFocus = false,
-        Parent = toolbar
+        Parent = self.Toolbar
     })
     
     if searchBox then
@@ -1390,7 +1507,7 @@ function UI:BuildToolbar()
         Size = UDim2.new(0, 300, 0, 32),
         Position = UDim2.new(0, 210, 0.5, -16),
         BackgroundTransparency = 1,
-        Parent = toolbar
+        Parent = self.Toolbar
     })
     
     if filterContainer then
@@ -1411,7 +1528,7 @@ function UI:BuildToolbar()
         Size = UDim2.new(0, 90, 0, 32),
         Position = UDim2.new(1, -90, 0.5, -16),
         BackgroundTransparency = 1,
-        Parent = toolbar
+        Parent = self.Toolbar
     })
     
     if actionContainer then
@@ -1523,7 +1640,7 @@ end
 function UI:BuildLogArea()
     if not self.Main then return end
     
-    local logFrame = Utils.Create("Frame", {
+    self.ContentFrame = Utils.Create("Frame", {
         Name = "LogFrame",
         Size = UDim2.new(1, -24, 1, -100),
         Position = UDim2.new(0, 12, 0, 88),
@@ -1533,8 +1650,8 @@ function UI:BuildLogArea()
         Parent = self.Main
     })
     
-    if not logFrame then return end
-    Utils.Corner(logFrame, Theme.CornerSmall)
+    if not self.ContentFrame then return end
+    Utils.Corner(self.ContentFrame, Theme.CornerSmall)
     
     self.LogList = Utils.Create("ScrollingFrame", {
         Name = "LogList",
@@ -1545,7 +1662,7 @@ function UI:BuildLogArea()
         ScrollBarImageTransparency = 0.5,
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        Parent = logFrame
+        Parent = self.ContentFrame
     })
     
     if self.LogList then
@@ -1613,6 +1730,7 @@ function UI:BuildResizeHandle()
                 local newWidth = ClonedFunctions.mathMax(self.MinWindowWidth, startSize.X.Offset + delta.X)
                 local newHeight = ClonedFunctions.mathMax(self.MinWindowHeight, startSize.Y.Offset + delta.Y)
                 Utils.SafeSet(self.Main, "Size", UDim2.new(0, newWidth, 0, newHeight))
+                self.ExpandedHeight = newHeight
             end
         end)
         
@@ -2214,7 +2332,7 @@ function UI:OpenDetailWindow(entry)
         Utils.Corner(contentFrame, Theme.CornerSmall)
         
         local contentScroll = Utils.Create("ScrollingFrame", {
-            Size = UDim2.new(1, 0, 1, 0),
+            Size = UDim2.new(1,0, 1, 0),
             BackgroundTransparency = 1,
             ScrollBarThickness = 5,
             ScrollBarImageColor3 = Theme.Accent,
@@ -2764,9 +2882,33 @@ function UI:ToggleMinimize()
     self.Minimized = not self.Minimized
     
     if self.Minimized then
+        if self.Toolbar then
+            Utils.SafeSet(self.Toolbar, "Visible", false)
+        end
+        if self.ContentFrame then
+            Utils.SafeSet(self.ContentFrame, "Visible", false)
+        end
+        local resizeHandle = self.Main and self.Main:FindFirstChild("ResizeHandle")
+        if resizeHandle then
+            Utils.SafeSet(resizeHandle, "Visible", false)
+        end
         Utils.Tween(self.Main, {Size = UDim2.new(0, self.Main.Size.X.Offset, 0, 40)}, 0.2)
     else
-        Utils.Tween(self.Main, {Size = UDim2.new(0, self.Main.Size.X.Offset, 0, 500)}, 0.2)
+        Utils.Tween(self.Main, {Size = UDim2.new(0, self.Main.Size.X.Offset, 0, self.ExpandedHeight)}, 0.2)
+        ClonedFunctions.taskDelay(0.2, function()
+            if not self.Minimized then
+                if self.Toolbar then
+                    Utils.SafeSet(self.Toolbar, "Visible", true)
+                end
+                if self.ContentFrame then
+                    Utils.SafeSet(self.ContentFrame, "Visible", true)
+                end
+                local resizeHandle = self.Main and self.Main:FindFirstChild("ResizeHandle")
+                if resizeHandle then
+                    Utils.SafeSet(resizeHandle, "Visible", true)
+                end
+            end
+        end)
     end
 end
 
@@ -2839,7 +2981,7 @@ function Core:Init()
     if AdonisBypassed then
         ClonedFunctions.taskDelay(0.5, function()
             if self.UI then
-                self.UI:ShowNotification("Adonis hook detection mitigated!", Theme.Success)
+                self.UI:ShowNotification("Adonis detections patched!", Theme.Success)
             end
         end)
     end
@@ -2983,9 +3125,15 @@ function Core:Shutdown()
     end
 end
 
-local BlatantSpy = Core.new()
-BlatantSpy:Init()
+local function StartBlatantSpy()
+    local BlatantSpy = Core.new()
+    BlatantSpy:Init()
+    
+    Globals.BlatantSpy = BlatantSpy
+    
+    return BlatantSpy
+end
 
-Globals.BlatantSpy = BlatantSpy
-
-return BlatantSpy
+ShowAdonisPrompt(function()
+    StartBlatantSpy()
+end)
