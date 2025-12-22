@@ -80,8 +80,39 @@ local unpack = ClonedFunctions.unpack
 local Globals = getgenv()
 
 local AdonisBypassed = false
+local ActorInterceptionEnabled = false
 
-local function PatchAdonisDetections()
+local CacheAPI = {}
+
+function CacheAPI.IsAvailable()
+    return cache and cache.invalidate and cache.iscached and cache.replace
+end
+
+function CacheAPI.Invalidate(object)
+    if not CacheAPI.IsAvailable() then return false end
+    local success = pcall(function()
+        cache.invalidate(object)
+    end)
+    return success
+end
+
+function CacheAPI.IsCached(object) -- Cold
+    if not CacheAPI.IsAvailable() then return nil end
+    local success, result = pcall(function()
+        return cache.iscached(object)
+    end)
+    return success and result or nil
+end
+
+function CacheAPI.Replace(object, newObject)
+    if not CacheAPI.IsAvailable() then return false end
+    local success = pcall(function()
+        cache.replace(object, newObject)
+    end)
+    return success
+end
+
+local function PatchAdonisDetections() -- Pretty easy...
     pcall(function()
         for _, v in getgc(true) do
             if type(v) == "table" and rawget(v, "indexInstance") then
@@ -118,7 +149,7 @@ local RequiredFunctions = {
     "getcallingscript", "cloneref", "getnamecallmethod", "checkcaller",
     "setclipboard", "clonefunction"
 }
- -- WOW!
+
 local MissingFunctions = {}
 
 for _, funcName in ipairs(RequiredFunctions) do
@@ -238,7 +269,7 @@ if #MissingFunctions > 0 then
     return
 end
 
-local GameRef = cloneref(game)
+local GameRef = cloneref(game) --wow!!!!
 local Services = {}
 do
     local serviceNames = {
@@ -363,6 +394,138 @@ local function ShowAdonisPrompt(callback)
     end)
 end
 
+local function ShowActorPrompt(callback)
+    if not getactors then
+        callback(false)
+        return
+    end
+    
+    local actors = {}
+    pcall(function()
+        actors = getactors()
+    end)
+    
+    if #actors == 0 then
+        callback(false)
+        return
+    end
+    
+    local PromptGui = Instance.new("ScreenGui")
+    PromptGui.Name = "BlatantSpyActorPrompt"
+    PromptGui.ResetOnSpawn = false
+    PromptGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+    PromptGui.DisplayOrder = 9999
+    
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Size = UDim2.new(0, 400, 0, 160)
+    MainFrame.Position = UDim2.new(0.5, -200, 0.5, -80)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
+    MainFrame.BackgroundTransparency = 0.05
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Parent = PromptGui
+    
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 8)
+    Corner.Parent = MainFrame
+    
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Color = Color3.fromRGB(255, 165, 0)
+    Stroke.Thickness = 1
+    Stroke.Transparency = 0.5
+    Stroke.Parent = MainFrame
+    
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, -20, 0, 30)
+    Title.Position = UDim2.new(0, 10, 0, 15)
+    Title.BackgroundTransparency = 1
+    Title.Text = "BLATANTSPY - ACTOR DETECTED"
+    Title.TextColor3 = Color3.fromRGB(255, 165, 0)
+    Title.TextSize = 18
+    Title.Font = Enum.Font.GothamBold
+    Title.TextXAlignment = Enum.TextXAlignment.Center
+    Title.Parent = MainFrame
+    
+    local Question = Instance.new("TextLabel")
+    Question.Size = UDim2.new(1, -20, 0, 25)
+    Question.Position = UDim2.new(0, 10, 0, 50)
+    Question.BackgroundTransparency = 1
+    Question.Text = "Intercept Actor-Based events? (" .. #actors .. " actors found)"
+    Question.TextColor3 = Color3.fromRGB(220, 220, 220)
+    Question.TextSize = 15
+    Question.Font = Enum.Font.Gotham
+    Question.TextXAlignment = Enum.TextXAlignment.Center
+    Question.Parent = MainFrame
+    
+    local SubText = Instance.new("TextLabel")
+    SubText.Size = UDim2.new(1, -20, 0, 20)
+    SubText.Position = UDim2.new(0, 10, 0, 72)
+    SubText.BackgroundTransparency = 1
+    SubText.Text = "Actor events will be marked with [ActorCall] prefix"
+    SubText.TextColor3 = Color3.fromRGB(150, 150, 150)
+    SubText.TextSize = 12
+    SubText.Font = Enum.Font.Gotham
+    SubText.TextXAlignment = Enum.TextXAlignment.Center
+    SubText.Parent = MainFrame
+    
+    local ButtonContainer = Instance.new("Frame")
+    ButtonContainer.Size = UDim2.new(1, -40, 0, 36)
+    ButtonContainer.Position = UDim2.new(0, 20, 0, 105)
+    ButtonContainer.BackgroundTransparency = 1
+    ButtonContainer.Parent = MainFrame
+    
+    local YesBtn = Instance.new("TextButton")
+    YesBtn.Size = UDim2.new(0, 140, 0, 36)
+    YesBtn.Position = UDim2.new(0, 0, 0, 0)
+    YesBtn.BackgroundColor3 = Color3.fromRGB(87, 181, 106)
+    YesBtn.BackgroundTransparency = 0.2
+    YesBtn.Text = "YES"
+    YesBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    YesBtn.TextSize = 14
+    YesBtn.Font = Enum.Font.GothamBold
+    YesBtn.BorderSizePixel = 0
+    YesBtn.Parent = ButtonContainer
+    
+    local YesBtnCorner = Instance.new("UICorner")
+    YesBtnCorner.CornerRadius = UDim.new(0, 6)
+    YesBtnCorner.Parent = YesBtn
+    
+    local NoBtn = Instance.new("TextButton")
+    NoBtn.Size = UDim2.new(0, 140, 0, 36)
+    NoBtn.Position = UDim2.new(1, -140, 0, 0)
+    NoBtn.BackgroundColor3 = Color3.fromRGB(219, 75, 75)
+    NoBtn.BackgroundTransparency = 0.2
+    NoBtn.Text = "NO"
+    NoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NoBtn.TextSize = 14
+    NoBtn.Font = Enum.Font.GothamBold
+    NoBtn.BorderSizePixel = 0
+    NoBtn.Parent = ButtonContainer
+    
+    local NoBtnCorner = Instance.new("UICorner")
+    NoBtnCorner.CornerRadius = UDim.new(0, 6)
+    NoBtnCorner.Parent = NoBtn
+    
+    if syn and syn.protect_gui then
+        syn.protect_gui(PromptGui)
+        PromptGui.Parent = cloneref(game:GetService("CoreGui"))
+    elseif gethui then
+        PromptGui.Parent = gethui()
+    else
+        PromptGui.Parent = cloneref(game:GetService("CoreGui"))
+    end
+    
+    YesBtn.MouseButton1Click:Connect(function()
+        PromptGui:Destroy()
+        ActorInterceptionEnabled = true
+        callback(true)
+    end)
+    
+    NoBtn.MouseButton1Click:Connect(function()
+        PromptGui:Destroy()
+        callback(false)
+    end)
+end
+
 local Theme = {
     Primary = Color3.fromRGB(30, 30, 30),
     Secondary = Color3.fromRGB(37, 37, 38),
@@ -386,6 +549,7 @@ local Theme = {
     BindableFunction = Color3.fromRGB(206, 145, 120),
     UnreliableRemote = Color3.fromRGB(220, 220, 170),
     IncomingEvent = Color3.fromRGB(197, 134, 192),
+    ActorCall = Color3.fromRGB(255, 165, 0),
     
     Transparency = 0.05,
     TransparencyLight = 0.1,
@@ -783,13 +947,22 @@ function Utils.GenerateScript(remoteType, remotePath, args)
         BindableEvent = ":Fire",
         BindableFunction = ":Invoke",
         UnreliableRemoteEvent = ":FireServer",
-        OnClientEvent = "[OnClientEvent]"
+        OnClientEvent = "[OnClientEvent]",
+        ActorCall_RemoteEvent = ":FireServer",
+        ActorCall_RemoteFunction = ":InvokeServer",
+        ActorCall_BindableEvent = ":Fire",
+        ActorCall_BindableFunction = ":Invoke",
+        ActorCall_UnreliableRemoteEvent = ":FireServer"
     }
     
     local method = methods[remoteType] or ":FireServer"
     
     if remoteType == "OnClientEvent" then
         return "-- Server fired OnClientEvent:\n" .. remotePath .. ".OnClientEvent:Connect(function(" .. argsStr .. ") end)"
+    end
+    
+    if ClonedFunctions.stringFind(remoteType, "ActorCall_", 1, true) then
+        return "-- [ActorCall] Remote from Actor thread:\n" .. remotePath .. method .. "(" .. argsStr .. ")"
     end
     
     return remotePath .. method .. "(" .. argsStr .. ")"
@@ -884,6 +1057,7 @@ function LogEntry.new(data)
     self.HookType = data.HookType or "__namecall"
     self.Method = data.Method or "Unknown"
     self.Blocked = data.Blocked or false
+    self.ActorScript = data.ActorScript or nil
     
     return self
 end
@@ -895,7 +1069,12 @@ function LogEntry:GetColor()
         BindableEvent = Theme.BindableEvent,
         BindableFunction = Theme.BindableFunction,
         UnreliableRemoteEvent = Theme.UnreliableRemote,
-        OnClientEvent = Theme.IncomingEvent
+        OnClientEvent = Theme.IncomingEvent,
+        ActorCall_RemoteEvent = Theme.ActorCall,
+        ActorCall_RemoteFunction = Theme.ActorCall,
+        ActorCall_BindableEvent = Theme.ActorCall,
+        ActorCall_BindableFunction = Theme.ActorCall,
+        ActorCall_UnreliableRemoteEvent = Theme.ActorCall
     }
     return colors[self.RemoteType] or Theme.Accent
 end
@@ -907,7 +1086,12 @@ function LogEntry:GetTypeShort()
         BindableEvent = "BE",
         BindableFunction = "BF",
         UnreliableRemoteEvent = "URE",
-        OnClientEvent = "IN"
+        OnClientEvent = "IN",
+        ActorCall_RemoteEvent = "ACT",
+        ActorCall_RemoteFunction = "ACT",
+        ActorCall_BindableEvent = "ACT",
+        ActorCall_BindableFunction = "ACT",
+        ActorCall_UnreliableRemoteEvent = "ACT"
     }
     return shorts[self.RemoteType] or "?"
 end
@@ -950,11 +1134,24 @@ function LogEntry:GetDetailedInfo()
     local blockedColor = self.Blocked and Theme.Error or Theme.Text
     ClonedFunctions.tableInsert(lines, Key("Blocked: ") .. '<font color="' .. H(blockedColor) .. '">' .. blockedStatus .. '</font>')
     
+    if CacheAPI.IsAvailable() then
+        local isCached = CacheAPI.IsCached(self.Remote)
+        if isCached ~= nil then
+            ClonedFunctions.tableInsert(lines, Key("Cached: ") .. Value(tostring(isCached)))
+        end
+    end
+    
     ClonedFunctions.tableInsert(lines, "")
     
     ClonedFunctions.tableInsert(lines, Header("CALLER INFORMATION"))
     if self.RemoteType == "OnClientEvent" then
         ClonedFunctions.tableInsert(lines, Value("Source: Server (Incoming Network)"))
+    elseif ClonedFunctions.stringFind(self.RemoteType, "ActorCall_", 1, true) then
+        ClonedFunctions.tableInsert(lines, Value("Source: Actor Thread (Parallel Execution)"))
+        ClonedFunctions.tableInsert(lines, Key("[s] Actor Script: ") .. Value(self.CallerInfo.Source or "[Unknown]"))
+        if self.ActorScript then
+            ClonedFunctions.tableInsert(lines, Key("[s] Actor Script Path: ") .. Value(Utils.GetPath(self.ActorScript)))
+        end
     else
         ClonedFunctions.tableInsert(lines, Key("[s] Source: ") .. Value(self.CallerInfo.Source or "[Unknown]"))
         ClonedFunctions.tableInsert(lines, Key("[s] Script Path: ") .. Value(self.CallerInfo.ScriptPath or "[Unknown]"))
@@ -1009,11 +1206,25 @@ function LogEntry:GetDetailedInfoPlain()
     ClonedFunctions.tableInsert(lines, "Hook: " .. self.HookType)
     ClonedFunctions.tableInsert(lines, "Method: " .. self.Method)
     ClonedFunctions.tableInsert(lines, "Blocked: " .. (self.Blocked and "TRUE" or "false"))
+    
+    if CacheAPI.IsAvailable() then
+        local isCached = CacheAPI.IsCached(self.Remote)
+        if isCached ~= nil then
+            ClonedFunctions.tableInsert(lines, "Cached: " .. tostring(isCached))
+        end
+    end
+    
     ClonedFunctions.tableInsert(lines, "")
     
     ClonedFunctions.tableInsert(lines, "=== CALLER INFORMATION ===")
     if self.RemoteType == "OnClientEvent" then
         ClonedFunctions.tableInsert(lines, "Source: Server (Incoming Network)")
+    elseif ClonedFunctions.stringFind(self.RemoteType, "ActorCall_", 1, true) then
+        ClonedFunctions.tableInsert(lines, "Source: Actor Thread (Parallel Execution)")
+        ClonedFunctions.tableInsert(lines, "[s] Actor Script: " .. (self.CallerInfo.Source or "[Unknown]"))
+        if self.ActorScript then
+            ClonedFunctions.tableInsert(lines, "[s] Actor Script Path: " .. Utils.GetPath(self.ActorScript))
+        end
     else
         ClonedFunctions.tableInsert(lines, "[s] Source: " .. (self.CallerInfo.Source or "[Unknown]"))
         ClonedFunctions.tableInsert(lines, "[s] Script Path: " .. (self.CallerInfo.ScriptPath or "[Unknown]"))
@@ -1051,6 +1262,26 @@ function LogEntry:GetDetailedInfoPlain()
     ClonedFunctions.tableInsert(lines, self:GetScript())
     
     return ClonedFunctions.tableConcat(lines, "\n")
+end
+
+function LogEntry:CanDecompile()
+    if self.CallerInfo.ScriptInstance then
+        return true
+    end
+    if self.ActorScript then
+        return true
+    end
+    return false
+end
+
+function LogEntry:GetDecompilableScript()
+    if self.CallerInfo.ScriptInstance then
+        return self.CallerInfo.ScriptInstance
+    end
+    if self.ActorScript then
+        return self.ActorScript
+    end
+    return nil
 end
 
 local BlockList = {}
@@ -1163,6 +1394,10 @@ function Logger:GetFilteredGroups()
         if self.TypeFilter == "All" and group.RemoteType == "OnClientEvent" then
              passType = true
         end
+        
+        if self.TypeFilter == "All" and ClonedFunctions.stringFind(group.RemoteType, "ActorCall_", 1, true) then
+            passType = true
+        end
 
         local passText = self.Filter == "" or
             ClonedFunctions.stringFind(ClonedFunctions.stringLower(group.RemotePath), ClonedFunctions.stringLower(self.Filter), 1, true) or
@@ -1205,7 +1440,7 @@ function Decompiler:Process(scriptInstance)
         end
     end
     
-    if getscriptbytecode then -- ..........
+    if getscriptbytecode then -- If decompile doesn't work, I added getscriptbytecode 😊
         local success, bytecode = pcall(getscriptbytecode, scriptInstance)
         if success and bytecode then
             if disassemble then
@@ -1971,12 +2206,12 @@ function UI:UpdateGroupItem(group)
             
             local typeLabel = itemData.Frame:FindFirstChild("TypeLabel")
             if typeLabel then
-                 typeLabel.BackgroundColor3 = group.LastEntry:GetColor()
+                typeLabel.BackgroundColor3 = group.LastEntry:GetColor()
             end
-             
+            
             local colorBar = itemData.Frame:FindFirstChild("ColorBar")
             if colorBar then
-                 colorBar.BackgroundColor3 = group.LastEntry:GetColor()
+                colorBar.BackgroundColor3 = group.LastEntry:GetColor()
             end
         end
     end)
@@ -2093,6 +2328,8 @@ function UI:CreateSubEntryItem(entry, parent, index)
     local callerName = "[Anonymous]"
     if entry.RemoteType == "OnClientEvent" then
         callerName = "Server"
+    elseif ClonedFunctions.stringFind(entry.RemoteType, "ActorCall_", 1, true) then
+        callerName = "[ActorCall]"
     else
         callerName = entry.CallerInfo.Name or "[Anonymous]"
     end
@@ -2101,9 +2338,9 @@ function UI:CreateSubEntryItem(entry, parent, index)
         Size = UDim2.new(1, -180, 1, 0),
         Position = UDim2.new(0, 110, 0, 0),
         BackgroundTransparency = 1,
-        Text = callerName .. (entry.RemoteType ~= "OnClientEvent" and (" @ line " .. tostring(entry.CallerInfo.Line or 0)) or ""),
+        Text = callerName .. (entry.RemoteType ~= "OnClientEvent" and not ClonedFunctions.stringFind(entry.RemoteType, "ActorCall_", 1, true) and (" @ line " .. tostring(entry.CallerInfo.Line or 0)) or ""),
         TextColor3 = Theme.TextDim,
-        TextSize = 10,
+                TextSize = 10,
         Font = Enum.Font.RobotoMono,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd,
@@ -2275,7 +2512,7 @@ function UI:OpenDetailWindow(entry)
             self:ShowNotification("Info copied", Theme.Success)
         end)
         
-        if entry.CallerInfo.ScriptInstance then
+        if entry:CanDecompile() then
             self:CreateDetailButton("DECOMPILE", btnFrame, function()
                 self:OpenDecompileWindow(entry)
             end)
@@ -2305,18 +2542,45 @@ function UI:OpenDetailWindow(entry)
                 local args = entry.Arguments
                 local rem = entry.Remote
                 
-                if rem:IsA("RemoteEvent") or rem:IsA("UnreliableRemoteEvent") then
+                if entry.RemoteType == "OnClientEvent" then
+                    if firesignal then
+                        pcall(function()
+                            firesignal(rem.OnClientEvent, unpack(args))
+                        end)
+                        self:ShowNotification("Signal Fired!", Theme.Success)
+                    elseif replicatesignal then
+                        pcall(function()
+                            replicatesignal(rem.OnClientEvent, unpack(args))
+                        end)
+                        self:ShowNotification("Signal Replicated!", Theme.Success)
+                    else
+                        self:ShowNotification("firesignal not available", Theme.Error)
+                    end
+                elseif rem:IsA("RemoteEvent") or rem:IsA("UnreliableRemoteEvent") then
                     rem:FireServer(unpack(args))
+                    self:ShowNotification("Remote Fired!", Theme.Success)
                 elseif rem:IsA("RemoteFunction") then
                     rem:InvokeServer(unpack(args))
+                    self:ShowNotification("Remote Fired!", Theme.Success)
                 elseif rem:IsA("BindableEvent") then
                     rem:Fire(unpack(args))
+                    self:ShowNotification("Remote Fired!", Theme.Success)
                 elseif rem:IsA("BindableFunction") then
                     rem:Invoke(unpack(args))
+                    self:ShowNotification("Remote Fired!", Theme.Success)
                 end
-                self:ShowNotification("Remote Fired!", Theme.Success)
             end)
         end)
+        
+        if CacheAPI.IsAvailable() then
+            self:CreateDetailButton("INVALIDATE", btnFrame, function()
+                if CacheAPI.Invalidate(entry.Remote) then
+                    self:ShowNotification("Cache invalidated", Theme.Success)
+                else
+                    self:ShowNotification("Failed to invalidate", Theme.Error)
+                end
+            end)
+        end
     end
     
     local contentFrame = Utils.Create("Frame", {
@@ -2369,7 +2633,14 @@ function UI:OpenDetailWindow(entry)
 end
 
 function UI:OpenDecompileWindow(entry)
-    if not entry or not entry.CallerInfo.ScriptInstance then
+    if not entry then
+        self:ShowNotification("No entry provided", Theme.Error)
+        return
+    end
+    
+    local scriptToDecompile = entry:GetDecompilableScript()
+    
+    if not scriptToDecompile then
         self:ShowNotification("No script to decompile", Theme.Error)
         return
     end
@@ -2416,11 +2687,16 @@ function UI:OpenDecompileWindow(entry)
             Parent = header
         })
         
+        local titleText = "DECOMPILE | " .. tostring(scriptToDecompile.Name)
+        if entry.ActorScript then
+            titleText = "DECOMPILE [ACTOR] | " .. tostring(scriptToDecompile.Name)
+        end
+        
         Utils.Create("TextLabel", {
             Size = UDim2.new(1, -70, 1, 0),
             Position = UDim2.new(0, 12, 0, 0),
             BackgroundTransparency = 1,
-            Text = "DECOMPILE | " .. tostring(entry.CallerInfo.ScriptInstance.Name),
+            Text = titleText,
             TextColor3 = Theme.Text,
             TextSize = 15,
             Font = Enum.Font.GothamBold,
@@ -2453,7 +2729,7 @@ function UI:OpenDecompileWindow(entry)
         self:SetupWindowDrag(window, header)
     end
     
-    local decompiled = self.Decompiler:Process(entry.CallerInfo.ScriptInstance)
+    local decompiled = self.Decompiler:Process(scriptToDecompile)
     
     local copyBtn = Utils.Create("TextButton", {
         Size = UDim2.new(0, 90, 0, 28),
@@ -2761,6 +3037,7 @@ function UI:ProcessPendingUpdates()
             local passType = self.Logger.TypeFilter == "All" or group.RemoteType == self.Logger.TypeFilter
             if self.Logger.TypeFilter == "RemoteEvent" and group.RemoteType == "OnClientEvent" then passType = false end
             if self.Logger.TypeFilter == "All" and group.RemoteType == "OnClientEvent" then passType = true end
+            if self.Logger.TypeFilter == "All" and ClonedFunctions.stringFind(group.RemoteType, "ActorCall_", 1, true) then passType = true end
 
             local passText = self.Logger.Filter == "" or
                 ClonedFunctions.stringFind(ClonedFunctions.stringLower(group.RemotePath), ClonedFunctions.stringLower(self.Logger.Filter), 1, true) or
@@ -2967,6 +3244,10 @@ function Core.new()
     self.InHook = false
     self.Active = true
     self.IncomingConnections = {}
+    self.ActorHooked = false
+    self.ActorChannel = nil
+    self.ActorChannelId = nil
+    self.ActorScripts = {}
     
     return self
 end
@@ -2974,6 +3255,10 @@ end
 function Core:Init()
     self:HookRemotes()
     self:HookIncoming()
+    
+    if ActorInterceptionEnabled then
+        self:HookActors()
+    end
     
     self.UI = UI.new(self.Logger, self.BlockList, self.Decompiler)
     self.UI:Build()
@@ -2985,6 +3270,192 @@ function Core:Init()
             end
         end)
     end
+    
+    if ActorInterceptionEnabled then
+        ClonedFunctions.taskDelay(0.8, function()
+            if self.UI then
+                self.UI:ShowNotification("Actor interception enabled!", Theme.Warning)
+            end
+        end)
+    end
+    
+    if CacheAPI.IsAvailable() then
+        ClonedFunctions.taskDelay(1.1, function()
+            if self.UI then
+                self.UI:ShowNotification("Cache API available!", Theme.Success)
+            end
+        end)
+    end
+end
+
+function Core:HookActors()
+    if not getactors or not run_on_actor or not create_comm_channel or not get_comm_channel then
+        return
+    end
+    
+    local selfRef = self
+    
+    local r1, r2 = create_comm_channel()
+    
+    local channel, channelId
+    
+    if typeof(r1) == "Instance" and r1:IsA("BindableEvent") then
+        channel = r1
+        channelId = r2
+    elseif typeof(r2) == "Instance" and r2:IsA("BindableEvent") then
+        channel = r2
+        channelId = r1
+    elseif type(r1) == "number" then
+        channelId = r1
+        channel = r2
+    elseif type(r2) == "number" then
+        channelId = r2
+        channel = r1
+    end
+    
+    if not channel or not channelId then
+        return
+    end
+    
+    if type(channelId) ~= "number" then
+        return
+    end
+    
+    selfRef.ActorChannel = channel
+    selfRef.ActorChannelId = channelId
+    
+    local function handleActorData(data)
+        if not selfRef.Active then return end
+        if type(data) ~= "table" then return end
+        
+        local remote = data.Remote
+        local remoteType = data.RemoteType
+        local args = data.Arguments or {}
+        local actorScript = data.ActorScript
+        
+        if not remote or typeof(remote) ~= "Instance" then return end
+        
+        local isBlocked = selfRef.BlockList:IsBlocked(remote)
+        if isBlocked then return end
+        
+        local actorRemoteType = "ActorCall_" .. remoteType
+        
+        local sanitizedArgs = {}
+        for i, v in ipairs(args) do
+            if typeof(v) == "userdata" then
+                sanitizedArgs[i] = tostring(v)
+            else
+                sanitizedArgs[i] = v
+            end
+        end
+        
+        local actorScriptInstance = nil
+        if actorScript and typeof(actorScript) == "Instance" then
+            actorScriptInstance = actorScript
+            selfRef.ActorScripts[remote] = actorScript
+        end
+        
+        selfRef.Logger:Add({
+            Remote = remote,
+            RemoteType = actorRemoteType,
+            RemotePath = Utils.GetPath(remote),
+            Arguments = sanitizedArgs,
+            CallerInfo = { Source = "[Actor Thread]", Name = "[ActorCall]" },
+            HookType = "Actor",
+            Method = data.Method or "Unknown",
+            Blocked = false,
+            ActorScript = actorScriptInstance
+        })
+    end
+    
+    if typeof(channel) == "Instance" and channel:IsA("BindableEvent") then
+        channel.Event:Connect(handleActorData)
+    else
+        return
+    end
+    
+    local actorHookScript = string.format([[
+local channelId = %d
+local channel = get_comm_channel(channelId)
+
+if not channel then 
+    return 
+end
+
+if getgenv()._BlatantSpyActorHooked then 
+    return 
+end
+getgenv()._BlatantSpyActorHooked = true
+
+local firing = false
+
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    
+    if checkcaller() or firing then
+        return oldNamecall(self, ...)
+    end
+    
+    if method == "FireServer" or method == "InvokeServer" then
+        if typeof(self) == "Instance" then
+            local class = self.ClassName
+            local remoteType = nil
+            
+            if method == "FireServer" and class == "RemoteEvent" then
+                remoteType = "RemoteEvent"
+            elseif method == "FireServer" and class == "UnreliableRemoteEvent" then
+                remoteType = "UnreliableRemoteEvent"
+            elseif method == "InvokeServer" and class == "RemoteFunction" then
+                remoteType = "RemoteFunction"
+            end
+            
+            if remoteType then
+                local args = {...}
+                local callingScript = nil
+                pcall(function()
+                    callingScript = getcallingscript()
+                end)
+                task.defer(function()
+                    firing = true
+                    pcall(function()
+                        channel:Fire({
+                            Remote = self,
+                            RemoteType = remoteType,
+                            Arguments = args,
+                            Method = method,
+                            ActorScript = callingScript
+                        })
+                    end)
+                    firing = false
+                end)
+            end
+        end
+    end
+    
+    return oldNamecall(self, ...)
+end))
+]], channelId)
+    
+    local actors = getactors()
+    
+    for _, actor in ipairs(actors) do
+        pcall(function()
+            run_on_actor(actor, actorHookScript)
+        end)
+    end
+    
+    selfRef.ActorHooked = true
+    
+    GameRef.DescendantAdded:Connect(function(desc)
+        if desc:IsA("Actor") then
+            ClonedFunctions.taskDelay(0.5, function()
+                pcall(function()
+                    run_on_actor(desc, actorHookScript)
+                end)
+            end)
+        end
+    end)
 end
 
 function Core:HookIncoming()
@@ -3120,6 +3591,9 @@ end
 function Core:Shutdown()
     self.Active = false
     
+    getgenv()._BlatantSpyActorCallback = nil
+    getgenv()._BlatantSpyActorHooked = nil
+    
     if self.UI then
         self.UI:Close()
     end
@@ -3135,5 +3609,7 @@ local function StartBlatantSpy()
 end
 
 ShowAdonisPrompt(function()
-    StartBlatantSpy()
+    ShowActorPrompt(function(actorEnabled)
+        StartBlatantSpy()
+    end)
 end)
