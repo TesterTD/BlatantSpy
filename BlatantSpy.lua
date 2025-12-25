@@ -96,7 +96,7 @@ function CacheAPI.Invalidate(object)
     return success
 end
 
-function CacheAPI.IsCached(object) -- Cold
+function CacheAPI.IsCached(object)
     if not CacheAPI.IsAvailable() then return nil end
     local success, result = pcall(function()
         return cache.iscached(object)
@@ -112,7 +112,7 @@ function CacheAPI.Replace(object, newObject)
     return success
 end
 
-local function PatchAdonisDetections() -- Pretty easy...
+local function PatchAdonisDetections()
     pcall(function()
         for _, v in getgc(true) do
             if type(v) == "table" and rawget(v, "indexInstance") then
@@ -269,7 +269,7 @@ if #MissingFunctions > 0 then
     return
 end
 
-local GameRef = cloneref(game) --wow!!!!
+local GameRef = cloneref(game)
 local Services = {}
 do
     local serviceNames = {
@@ -890,9 +890,7 @@ function Utils.Serialize(value, depth, visited)
         return tostring(value)
         
     elseif valueType == "table" then
-        if visited[value] then
-            return '"[Cyclic Reference]"'
-        end
+        if visited[value] then return '"[Cyclic Reference]"' end
         visited[value] = true
         
         local isArray = true
@@ -905,7 +903,6 @@ function Utils.Serialize(value, depth, visited)
         end
         
         if isArray and count ~= #value then isArray = false end
-        
         if count == 0 then return "{}" end
         
         local parts = {}
@@ -919,23 +916,13 @@ function Utils.Serialize(value, depth, visited)
         else
             local keys = {}
             for k in pairs(value) do ClonedFunctions.tableInsert(keys, k) end
-            
-            pcall(function()
-                ClonedFunctions.tableSort(keys, function(a, b)
-                    return tostring(a) < tostring(b)
-                end)
-            end)
+            pcall(function() ClonedFunctions.tableSort(keys, function(a, b) return tostring(a) < tostring(b) end) end)
             
             for _, k in ipairs(keys) do
                 local v = value[k]
-                local keyStr
-                
-                if type(k) == "string" and ClonedFunctions.stringMatch(k, "^[%a_][%w_]*$") then
-                    keyStr = k .. " = "
-                else
-                    keyStr = "[" .. Utils.Serialize(k, depth + 1, visited) .. "] = "
-                end
-                
+                local keyStr = (type(k) == "string" and ClonedFunctions.stringMatch(k, "^[%a_][%w_]*$")) 
+                    and (k .. " = ") 
+                    or ("[" .. Utils.Serialize(k, depth + 1, visited) .. "] = ")
                 ClonedFunctions.tableInsert(parts, indent .. keyStr .. Utils.Serialize(v, depth + 1, visited))
             end
         end
@@ -947,7 +934,6 @@ function Utils.Serialize(value, depth, visited)
         local name = "anonymous"
         local source = "unknown"
         local line = 0
-        
         pcall(function()
             if debug and debug.getinfo then
                 local info = debug.getinfo(value)
@@ -958,7 +944,6 @@ function Utils.Serialize(value, depth, visited)
                 end
             end
         end)
-        
         return ClonedFunctions.stringFormat('function() --[[ Name: %s | Source: %s:%d ]] end', name, source, line)
         
     elseif valueType == "userdata" then
@@ -966,23 +951,24 @@ function Utils.Serialize(value, depth, visited)
         
     elseif valueType == "thread" then
         local status = "unknown"
-        pcall(function()
-            status = coroutine.status(value)
-        end)
+        pcall(function() status = coroutine.status(value) end)
         return ClonedFunctions.stringFormat('coroutine.create(function() --[[ Status: %s ]] end)', status)
         
     elseif valueType == "buffer" then
         local size = buffer.len(value)
-        if size == 0 then
-            return "buffer.create(0)"
+        if size == 0 then return "buffer.create(0)" end
+        
+        local parts = {}
+        for i = 0, size - 1 do
+            local b = buffer.readu8(value, i)
+            if b >= 32 and b <= 126 and b ~= 34 and b ~= 92 then
+                ClonedFunctions.tableInsert(parts, string.char(b))
+            else
+                ClonedFunctions.tableInsert(parts, ClonedFunctions.stringFormat("\\x%02X", b))
+            end
         end
         
-        local content = buffer.tostring(value)
-        local escaped = ClonedFunctions.stringGsub(content, ".", function(c)
-            return ClonedFunctions.stringFormat("\\x%02X", ClonedFunctions.stringByte(c))
-        end)
-        
-        return ClonedFunctions.stringFormat('buffer.fromstring("%s")', escaped)
+        return 'buffer.fromstring("' .. ClonedFunctions.tableConcat(parts) .. '")'
     end
     
     return '"[' .. valueType .. ']"'
@@ -1013,11 +999,11 @@ function Utils.GenerateScript(remoteType, remotePath, args)
     local method = methods[remoteType] or ":FireServer"
     
     if remoteType == "OnClientEvent" then
-        return "-- Server fired OnClientEvent:\n" .. remotePath .. ".OnClientEvent:Connect(function(" .. argsStr .. ") end)"
+        return remotePath .. ".OnClientEvent:Connect(function(" .. argsStr .. ") end)"
     end
     
     if ClonedFunctions.stringFind(remoteType, "ActorCall_", 1, true) then
-        return "-- [ActorCall] Remote from Actor thread:\n" .. remotePath .. method .. "(" .. argsStr .. ")"
+        return remotePath .. method .. "(" .. argsStr .. ")"
     end
     
     return remotePath .. method .. "(" .. argsStr .. ")"
@@ -1495,7 +1481,7 @@ function Decompiler:Process(scriptInstance)
         end
     end
     
-    if getscriptbytecode then -- If decompile doesn't work, I added getscriptbytecode 😊
+    if getscriptbytecode then
         local success, bytecode = pcall(getscriptbytecode, scriptInstance)
         if success and bytecode then
             if disassemble then
