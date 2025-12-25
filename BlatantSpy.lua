@@ -790,9 +790,11 @@ function Utils.GetPath(instance)
     end
 end
 
-function Utils.Serialize(value, depth)
+function Utils.Serialize(value, depth, visited)
     depth = depth or 0
-    if depth > 8 then
+    visited = visited or {}
+    
+    if depth > 10 then
         return '"[MAX_DEPTH]"'
     end
     
@@ -854,8 +856,8 @@ function Utils.Serialize(value, depth)
     elseif valueType == "Ray" then
         return ClonedFunctions.stringFormat(
             "Ray.new(%s, %s)",
-            Utils.Serialize(value.Origin, depth + 1),
-            Utils.Serialize(value.Direction, depth + 1)
+            Utils.Serialize(value.Origin, depth + 1, visited),
+            Utils.Serialize(value.Direction, depth + 1, visited)
         )
         
     elseif valueType == "Rect" then
@@ -879,7 +881,7 @@ function Utils.Serialize(value, depth)
         for _, kp in ipairs(value.Keypoints) do
             ClonedFunctions.tableInsert(kps, ClonedFunctions.stringFormat(
                 "ColorSequenceKeypoint.new(%s, %s)",
-                tostring(kp.Time), Utils.Serialize(kp.Value, depth + 1)
+                tostring(kp.Time), Utils.Serialize(kp.Value, depth + 1, visited)
             ))
         end
         return "ColorSequence.new({" .. ClonedFunctions.tableConcat(kps, ", ") .. "})"
@@ -888,10 +890,13 @@ function Utils.Serialize(value, depth)
         return tostring(value)
         
     elseif valueType == "table" then
-        local parts = {}
+        if visited[value] then
+            return '"[Cyclic Reference]"'
+        end
+        visited[value] = true
+        
         local isArray = true
         local count = 0
-        
         for k, _ in pairs(value) do
             count = count + 1
             if type(k) ~= "number" or k < 1 or k ~= ClonedFunctions.mathFloor(k) then
@@ -899,35 +904,85 @@ function Utils.Serialize(value, depth)
             end
         end
         
-        if isArray and count == #value then
+        if isArray and count ~= #value then isArray = false end
+        
+        if count == 0 then return "{}" end
+        
+        local parts = {}
+        local indent = ClonedFunctions.stringRep("    ", depth + 1)
+        local closeIndent = ClonedFunctions.stringRep("    ", depth)
+        
+        if isArray then
             for _, v in ipairs(value) do
-                ClonedFunctions.tableInsert(parts, Utils.Serialize(v, depth + 1))
+                ClonedFunctions.tableInsert(parts, indent .. Utils.Serialize(v, depth + 1, visited))
             end
         else
-            for k, v in pairs(value) do
+            local keys = {}
+            for k in pairs(value) do ClonedFunctions.tableInsert(keys, k) end
+            
+            pcall(function()
+                ClonedFunctions.tableSort(keys, function(a, b)
+                    return tostring(a) < tostring(b)
+                end)
+            end)
+            
+            for _, k in ipairs(keys) do
+                local v = value[k]
                 local keyStr
+                
                 if type(k) == "string" and ClonedFunctions.stringMatch(k, "^[%a_][%w_]*$") then
-                    keyStr = k
+                    keyStr = k .. " = "
                 else
-                    keyStr = "[" .. Utils.Serialize(k, depth + 1) .. "]"
+                    keyStr = "[" .. Utils.Serialize(k, depth + 1, visited) .. "] = "
                 end
-                ClonedFunctions.tableInsert(parts, keyStr .. " = " .. Utils.Serialize(v, depth + 1))
+                
+                ClonedFunctions.tableInsert(parts, indent .. keyStr .. Utils.Serialize(v, depth + 1, visited))
             end
         end
         
-        return "{" .. ClonedFunctions.tableConcat(parts, ", ") .. "}"
+        visited[value] = nil
+        return "{\n" .. ClonedFunctions.tableConcat(parts, ",\n") .. "\n" .. closeIndent .. "}"
         
     elseif valueType == "function" then
-        return '"[function]"'
+        local name = "anonymous"
+        local source = "unknown"
+        local line = 0
+        
+        pcall(function()
+            if debug and debug.getinfo then
+                local info = debug.getinfo(value)
+                if info then
+                    name = info.name or name
+                    source = info.source or source
+                    line = info.currentline or line
+                end
+            end
+        end)
+        
+        return ClonedFunctions.stringFormat('function() --[[ Name: %s | Source: %s:%d ]] end', name, source, line)
         
     elseif valueType == "userdata" then
         return '"[userdata]"'
         
     elseif valueType == "thread" then
-        return '"[thread]"'
+        local status = "unknown"
+        pcall(function()
+            status = coroutine.status(value)
+        end)
+        return ClonedFunctions.stringFormat('coroutine.create(function() --[[ Status: %s ]] end)', status)
         
     elseif valueType == "buffer" then
-        return '"[buffer]"'
+        local size = buffer.len(value)
+        if size == 0 then
+            return "buffer.create(0)"
+        end
+        
+        local content = buffer.tostring(value)
+        local escaped = ClonedFunctions.stringGsub(content, ".", function(c)
+            return ClonedFunctions.stringFormat("\\x%02X", ClonedFunctions.stringByte(c))
+        end)
+        
+        return ClonedFunctions.stringFormat('buffer.fromstring("%s")', escaped)
     end
     
     return '"[' .. valueType .. ']"'
